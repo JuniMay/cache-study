@@ -2,7 +2,7 @@
 
 Using reinforcement learning to study cache replacement/prefetching policies.
 
-Not that there might be bugs, errors or improper experiment settings in this implementation.
+Note that there might be bugs, errors or improper experiment settings in this implementation.
 
 And reinforcement learning is not data-efficient, so the performance is not good enough. A supervised learning method might be a better option 🤗.
 
