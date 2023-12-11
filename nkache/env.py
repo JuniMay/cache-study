@@ -17,6 +17,8 @@ class CacheEnv:
         self.total_access_cnt = 0
         # total misses
         self.total_miss_cnt = 0
+        # total demand misses
+        self.total_demand_miss_cnt = 0
 
         # set accesses
         self.set_access_cnts = [0 for _ in range(num_sets)]
@@ -51,8 +53,11 @@ class CacheEnv:
         # traces
         self.traces: List[Tuple[str, int]] = []
 
-        # belady list
-        self.belady_list: Dict[Tuple[int, int], List[int]] = {}
+        # list for Belady's MIN
+        self.beladymin_list: Dict[Tuple[int, int], List[int]] = {}
+        
+        # list for Demand's MIN
+        self.demandmin_list: Dict[Tuple[int, int], List[int]] = {}
 
     def observation_space(self) -> int:
         return 9 + 16 * self.associativity
@@ -60,18 +65,33 @@ class CacheEnv:
     def action_space(self) -> int:
         return self.associativity
 
-    def prepare_belady(self) -> None:
-        self.belady_list = {}
+    def prepare_beladymin(self) -> None:
+        self.beladymin_list = {}
 
         for idx, (_, addr) in enumerate(self.traces):
             set_index = self.cache.set_index(addr)
             tag = self.cache.tag(addr)
-            if (set_index, tag) not in self.belady_list:
-                self.belady_list[(set_index, tag)] = []
+            if (set_index, tag) not in self.beladymin_list:
+                self.beladymin_list[(set_index, tag)] = []
 
-            self.belady_list[(set_index, tag)].append(idx)
+            self.beladymin_list[(set_index, tag)].append(idx)
+            
+    def prepare_demandmin(self) -> None:
+        self.prepare_beladymin()
+        
+        # prefetch index
+        self.demandmin_list = {}
+        
+        for (set_index, tag), line_access_indices in self.beladymin_list.items():
+            self.demandmin_list[(set_index, tag)] = []
+            
+            for idx in line_access_indices:
+                access_type, addr = self.traces[idx]
+                if access_type == 'p':
+                    self.demandmin_list[(set_index, tag)].append(idx)
 
-    def belady_replacement_optimal(self, trace_idx: int) -> Optional[List[int]]:
+
+    def beladymin_replacement_optimal(self, trace_idx: int) -> Optional[List[int]]:
         addr = self.traces[trace_idx][1]
         set_index = self.cache.set_index(addr)
 
@@ -87,7 +107,7 @@ class CacheEnv:
                 next_access_indices.append(-1)
                 continue
 
-            line_access_indices = self.belady_list[(set_index, tag)]
+            line_access_indices = self.beladymin_list[(set_index, tag)]
             next_access_idx = bisect_right(line_access_indices, trace_idx)
 
             if next_access_idx < len(line_access_indices):
@@ -97,6 +117,57 @@ class CacheEnv:
                 next_access_indices.append(float('inf'))
 
         return next_access_indices
+
+    def demandmin_replacement_optimal(self, trace_idx: int) -> Optional[List[int]]:
+        """DemandMIN replacement algorithm.
+
+        This is optimal if considering only demand misses.
+
+        Reference: Akanksha Jain and Calvin Lin. 2018. Rethinking belady's algorithm to accommodate 
+        prefetching. In Proceedings of the 45th Annual International Symposium on Computer 
+        Architecture (ISCA '18). IEEE Press, 110-123. https://doi.org/10.1109/ISCA.2018.00020
+
+        Basic idea: if one line will be prefetched in the furture, it is ok if it is evicted now.
+        Just evict the furthest prefetched line. (default prefecth distance is 0, so if a line is
+        not prefetched, it will not be evicted if one of others will be prefetched)
+
+        """
+        addr = self.traces[trace_idx][1]
+        set_index = self.cache.set_index(addr)
+
+        tags = [line.tag if line.valid else None for line in self.cache[set_index]]
+
+        if all(tag is None for tag in tags):
+            return None
+        
+        next_prefetch_indices = []
+        
+        for tag in tags:
+            if tag is None:
+                next_prefetch_indices.append(-1)
+                continue
+            
+            line_prefetch_indices = self.demandmin_list[(set_index, tag)]
+            next_prefetch_idx = bisect_right(line_prefetch_indices, trace_idx)
+            
+            if next_prefetch_idx < len(line_prefetch_indices):
+                next_prefetch_indices.append(
+                    line_prefetch_indices[next_prefetch_idx])
+                
+            else:
+                # if no prefetch, just ignore it
+                pass
+            
+        if len(next_prefetch_indices) == 0:
+            return self.beladymin_replacement_optimal(trace_idx)
+        
+        else:
+            next_prefetch_indices = [0] * len(next_prefetch_indices)
+            furthest_idx = next_prefetch_indices.index(max(next_prefetch_indices))
+            next_prefetch_indices[furthest_idx] = float('inf')
+            
+            return next_prefetch_indices
+        
 
     def update_set_recency(self, set_index: int, tag: int) -> None:
         if set_index not in self.line_recency:
@@ -232,6 +303,10 @@ class CacheEnv:
 
         if not success:
             self.total_miss_cnt += 1
+
+            if access_type != 'p':
+                self.total_demand_miss_cnt += 1
+
             self.set_access_cnts_at_miss[set_index] = self.set_access_cnts[set_index]
             success = self.cache.try_insert(addr)
 
@@ -334,6 +409,7 @@ class CacheEnv:
 
         self.total_access_cnt = 0
         self.total_miss_cnt = 0
+        self.total_demand_miss_cnt = 0
 
         self.set_access_cnts = [0 for _ in range(len(self.cache))]
         self.set_access_cnts_at_miss = [0 for _ in range(len(self.cache))]
@@ -358,7 +434,7 @@ class CacheEnv:
     def step(self, action: int) -> Tuple[npt.NDArray, float, bool]:
         reward = 0
 
-        next_access_indices = self.belady_replacement_optimal(
+        next_access_indices = self.beladymin_replacement_optimal(
             self.curr_trace_idx)
 
         if next_access_indices is not None:
@@ -382,25 +458,35 @@ class CacheEnv:
     def stats(self) -> Dict[str, float]:
         return {
             'hit_rate': 1 - self.total_miss_cnt / self.total_access_cnt,
+            'demand_miss_rate': self.total_demand_miss_cnt / self.total_access_cnt,
             'total_access_cnt': self.total_access_cnt,
             'total_miss_cnt': self.total_miss_cnt,
+            'total_demand_miss_cnt': self.total_demand_miss_cnt,
         }
 
-    def belady_replacement_hit_rate(self) -> float:
+    def do_beladymin_replacement(self) -> float:
         _, done = self.reset()
 
         while not done:
-            next_access_indices = self.belady_replacement_optimal(
+            next_access_indices = self.beladymin_replacement_optimal(
                 self.curr_trace_idx)
             if next_access_indices is None:
                 break
 
             action = np.argmax(next_access_indices)
 
-            _, reward, done = self.step(action)
-            
-            assert reward == 1
+            _, _, done = self.step(action)
 
-        hit_rate = self.stats()['hit_rate']
 
-        return hit_rate
+    def do_demandmin_replacement(self) -> None:
+        _, done = self.reset()
+
+        while not done:
+            next_access_indices = self.demandmin_replacement_optimal(
+                self.curr_trace_idx)
+            if next_access_indices is None:
+                break
+
+            action = np.argmax(next_access_indices)
+
+            _, _, done = self.step(action)

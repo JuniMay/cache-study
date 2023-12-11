@@ -54,14 +54,22 @@ class Agent:
 
         print(f'loading trace file: {trace_file}')
         self.env.load_trace(trace_file)
-        print('preparing belady')
-        self.env.prepare_belady()
+        print('preparing optimal replacement')
+        self.env.prepare_beladymin()
+        self.env.prepare_demandmin()
         print('env ready')
 
-        print('checking optimal hit rate')
-        optimal_hit_rate = self.env.belady_replacement_hit_rate()
-        print(f'optimal hit rate: {optimal_hit_rate}')
-
+        print('checking Belady\'s MIN performance')
+        self.env.do_beladymin_replacement()
+        beladymin_demand_miss_rate = self.env.stats()['demand_miss_rate']
+        print(f'Belady\'s MIN demand miss rate: {beladymin_demand_miss_rate}')
+        
+        self.env.reset()
+        print('checking Demand MIN performance')
+        self.env.do_demandmin_replacement()
+        demandmin_demand_miss_rate = self.env.stats()['demand_miss_rate']
+        print(f'Demand MIN demand miss rate: {demandmin_demand_miss_rate}')
+        
         self.batch_size = batch_size
         self.gamma = gamma
         self.eps_start = eps_start
@@ -220,9 +228,9 @@ class Agent:
 
 def main():
     argparser = argparse.ArgumentParser()
-    argparser.add_argument('--trace', type=str, required=True)
-    argparser.add_argument('--ckpt-dir', type=str, required=True)
-    argparser.add_argument('--stat-dir', type=str, required=True)
+    argparser.add_argument('--trace', type=str)
+    argparser.add_argument('--ckpt-dir', type=str)
+    argparser.add_argument('--stat-dir', type=str)
     argparser.add_argument('--num-sets', type=int, default=2048)
     argparser.add_argument('--associativity', type=int, default=16)
     argparser.add_argument('--block-size', type=int, default=64)
@@ -236,9 +244,10 @@ def main():
     argparser.add_argument('--lr', type=float, default=0.001)
     argparser.add_argument('--num-episodes', type=int, default=100)
     argparser.add_argument('--num-steps', type=int, default=50000)
+    argparser.add_argument('--train', action='store_true')
 
     args = argparser.parse_args()
-
+    
     agent = Agent(
         trace_file=args.trace,
         ckpt_dir=args.ckpt_dir,
@@ -255,8 +264,9 @@ def main():
         tau=args.tau,
         lr=args.lr
     )
-
-    agent.train(num_episodes=args.num_episodes, num_steps=args.num_steps)
+    
+    if args.train:
+        agent.train(num_episodes=args.num_episodes, num_steps=args.num_steps)
 
 
 if __name__ == '__main__':
