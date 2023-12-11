@@ -56,19 +56,16 @@ class Agent:
         self.env.load_trace(trace_file)
         print('preparing optimal replacement')
         self.env.prepare_beladymin()
-        self.env.prepare_demandmin()
         print('env ready')
 
         print('checking Belady\'s MIN performance')
         self.env.do_beladymin_replacement()
-        beladymin_demand_miss_rate = self.env.stats()['demand_miss_rate']
-        print(f'Belady\'s MIN demand miss rate: {beladymin_demand_miss_rate}')
+        print(f'Belady\'s MIN stats: {self.env.stats()}')
         
         self.env.reset()
         print('checking Demand MIN performance')
         self.env.do_demandmin_replacement()
-        demandmin_demand_miss_rate = self.env.stats()['demand_miss_rate']
-        print(f'Demand MIN demand miss rate: {demandmin_demand_miss_rate}')
+        print(f'Demand MIN stats: {self.env.stats()}')
         
         self.batch_size = batch_size
         self.gamma = gamma

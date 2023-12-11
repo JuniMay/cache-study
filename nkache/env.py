@@ -75,21 +75,6 @@ class CacheEnv:
                 self.beladymin_list[(set_index, tag)] = []
 
             self.beladymin_list[(set_index, tag)].append(idx)
-            
-    def prepare_demandmin(self) -> None:
-        self.prepare_beladymin()
-        
-        # prefetch index
-        self.demandmin_list = {}
-        
-        for (set_index, tag), line_access_indices in self.beladymin_list.items():
-            self.demandmin_list[(set_index, tag)] = []
-            
-            for idx in line_access_indices:
-                access_type, addr = self.traces[idx]
-                if access_type == 'p':
-                    self.demandmin_list[(set_index, tag)].append(idx)
-
 
     def beladymin_replacement_optimal(self, trace_idx: int) -> Optional[List[int]]:
         addr = self.traces[trace_idx][1]
@@ -139,33 +124,40 @@ class CacheEnv:
 
         if all(tag is None for tag in tags):
             return None
-        
+
+        next_access_indices = []
         next_prefetch_indices = []
         
+        prefetched = False
+
         for tag in tags:
             if tag is None:
+                next_access_indices.append(-1)
                 next_prefetch_indices.append(-1)
                 continue
-            
-            line_prefetch_indices = self.demandmin_list[(set_index, tag)]
-            next_prefetch_idx = bisect_right(line_prefetch_indices, trace_idx)
-            
-            if next_prefetch_idx < len(line_prefetch_indices):
-                next_prefetch_indices.append(
-                    line_prefetch_indices[next_prefetch_idx])
+
+            line_access_indices = self.beladymin_list[(set_index, tag)]
+            next_access_idx = bisect_right(line_access_indices, trace_idx)
+
+            if next_access_idx < len(line_access_indices):
+                idx = line_access_indices[next_access_idx]
+                
+                next_access_indices.append(idx)
+                
+                if self.traces[idx][0] == 'p':
+                    prefetched = True
+                    next_prefetch_indices.append(idx)
+                else:
+                    next_prefetch_indices.append(-1)
                 
             else:
-                # if no prefetch, just ignore it
-                pass
-            
-        if len(next_prefetch_indices) == 0:
-            return self.beladymin_replacement_optimal(trace_idx)
+                next_access_indices.append(float('inf'))
+                next_prefetch_indices.append(-1)
+                
+        if not prefetched:
+            return next_access_indices
         
         else:
-            next_prefetch_indices = [0] * len(next_prefetch_indices)
-            furthest_idx = next_prefetch_indices.index(max(next_prefetch_indices))
-            next_prefetch_indices[furthest_idx] = float('inf')
-            
             return next_prefetch_indices
         
 
