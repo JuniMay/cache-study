@@ -4,8 +4,8 @@ import os
 
 from copy import deepcopy
 
-l2c_prefetchers = ["no", "next_line", "ip_stride", "spp_dev", "va_ampm_lite"]
-llc_replacements = ["lru", "drrip", "ship", "srrip"]
+prefetchers = ["no", "next_line", "ip_stride", "spp_dev", "va_ampm_lite"]
+replacements = ["lru", "drrip", "ship", "srrip"]
 
 root_dir = "../config/combination"
 
@@ -48,7 +48,7 @@ base_configuration = {
         "sets": 512,
         "ways": 8,
         "latency": 12,
-        "prefetcher": "no",
+        "prefetcher": "ip_stride",
         "replacement": "lru"
     },
 
@@ -61,18 +61,18 @@ base_configuration = {
     }
 }
 
-for llc_replacement in llc_replacements:
-    llc_dir = os.path.join(root_dir, llc_replacement)
+for replacement in replacements:
+    llc_dir = os.path.join(root_dir, replacement)
     os.makedirs(llc_dir, exist_ok=True)
 
-    for l2c_prefetcher in l2c_prefetchers:
+    for prefetcher in prefetchers:
         configuration = deepcopy(base_configuration)
         
-        configuration["executable_name"] = f"champsim_{llc_replacement}_{l2c_prefetcher}"
-        configuration["L2C"]["prefetcher"] = l2c_prefetcher
-        configuration["LLC"]["replacement"] = llc_replacement
+        configuration["executable_name"] = f"champsim_{replacement}_{prefetcher}"
+        configuration["LLC"]["prefetcher"] = prefetcher
+        configuration["LLC"]["replacement"] = replacement
 
-        file_name = f"{l2c_prefetcher}.json"
+        file_name = f"{prefetcher}.json"
         file_path = os.path.join(llc_dir, file_name)
 
         with open(file_path, 'w') as json_file:

@@ -123,7 +123,7 @@ for metric in ["LLC Hit Rate", "MPKI", "IPC", "Prefetch Accuracy"]:
                 3].bar(x + offset, grouped_result[prefetcher], width, label=prefetcher)
 
     # only one legend for the whole figure at bottom right
-    handles, labels = axs[0, 0].get_legend_handles_labels()
+    handles, labels = axs[2, 1].get_legend_handles_labels()
     fig.legend(handles, labels, loc='lower right', bbox_to_anchor=(0.88, 0.07))
 
     # remove empty subplots
