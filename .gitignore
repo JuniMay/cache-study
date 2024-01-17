@@ -14,5 +14,5 @@ Cargo.lock
 
 .DS_Store
 
-results/
-plots/
+results*/
+plots*/
