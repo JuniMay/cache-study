@@ -26,7 +26,6 @@ for subdir, dirs, files in os.walk(result_dir):
                     result[trace_id][executable_name] = {}
 
                     llc = data[0]['sim']['LLC']
-                    l2c = data[0]['sim']['cpu0_L2C']
 
                     llc_total_hit = 0
                     llc_total_miss = 0
@@ -43,9 +42,10 @@ for subdir, dirs, files in os.walk(result_dir):
                     result[trace_id][executable_name]['MPKI'] = (
                         llc_total_miss / instructions) * 1000
                     result[trace_id][executable_name]['IPC'] = instructions / cycles
+
                     try:
-                        result[trace_id][executable_name]['Prefetch Accuracy'] = l2c['useful prefetch'] / (
-                            l2c['useful prefetch'] + l2c['useless prefetch'])
+                        result[trace_id][executable_name]['Prefetch Accuracy'] = llc['useful prefetch'] / (
+                            llc['useful prefetch'] + llc['useless prefetch'])
                     except ZeroDivisionError:
                         result[trace_id][executable_name]['Prefetch Accuracy'] = 0
                         
@@ -57,11 +57,11 @@ for trace_id in result.keys():
     if 'rlr va-ampm-lite' not in trace_result:
         continue
 
-    lru_no_prefetch_ipc = trace_result['rlr va-ampm-lite']['IPC']
+    baseline = trace_result['rlr va-ampm-lite']['IPC']
 
     for executable_name in trace_result.keys():
         trace_result[executable_name]['IPC Speedup'] = (
-            trace_result[executable_name]['IPC'] - lru_no_prefetch_ipc) / lru_no_prefetch_ipc
+            trace_result[executable_name]['IPC'] - baseline) / baseline
 
 os.makedirs('../plots_unified', exist_ok=True)
 
@@ -102,20 +102,17 @@ for i, metric in enumerate(['MPKI', "IPC Speedup", "LLC Hit Rate"]):
                 
     assert len(y_vanilla) == len(y_unified)
     assert len(y_vanilla) == num_trace
-                
 
     axs[i].bar(x - width, y_vanilla, width, label='rlr va-ampm-lite')
     axs[i].bar(x, y_unified, width, label='unified va-ampm-lite')
     axs[i].bar(x + width, y_unified_next_line, width, label='unified next-line')
-    
     
     axs[i].set_xticks(x)
     axs[i].set_xticklabels(result.keys())
     axs[i].set_xlabel('Trace')
     axs[i].set_ylabel(metric)
 
-axs[1].legend(loc='lower right')
+axs[1].legend(loc='upper left')
 
-    
 plt.tight_layout()
 plt.savefig('../plots_unified/metrics.png')
