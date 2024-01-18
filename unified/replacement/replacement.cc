@@ -43,17 +43,32 @@ uint32_t CACHE::find_victim(
       const unified::CacheLineMetadata& metadata1,
       const unified::CacheLineMetadata& metadata2
     ) {
+      auto prefetch1 =
+        unified::prefetch_context.query_future(this, metadata1.full_addr);
+      auto prefetch2 =
+        unified::prefetch_context.query_future(this, metadata2.full_addr);
+
+      // further prefetches are less prioritized to be retained
+      // and thus has less priority
+      if (prefetch1 && prefetch2) {
+        return prefetch1 > prefetch2;
+      } else if (prefetch1) {
+        return true;
+      } else if (prefetch2) {
+        return false;
+      }
+
+      // fallback to RLR
+
       uint8_t priority1 = 0;
       priority1 += metadata1.age > reuse_distance ? 0 : 8;
+      priority1 += metadata1.type;
       priority1 += metadata1.hit;
-      priority1 +=
-        unified::prefetch_context.query_future(this, metadata1.full_addr) > 0 ? 0 : 4;
 
       uint8_t priority2 = 0;
       priority2 += metadata2.age > reuse_distance ? 0 : 8;
+      priority2 += metadata2.type;
       priority2 += metadata2.hit;
-      priority2 +=
-        unified::prefetch_context.query_future(this, metadata2.full_addr) > 0 ? 0 : 4;
 
       return priority1 < priority2 ||
              (priority1 == priority2 && metadata1.age < metadata2.age);
@@ -82,9 +97,8 @@ void CACHE::update_replacement_state(
 
   auto& metadata = ::cache_context.metadata[this].at(set * NUM_WAY + way);
 
-  for (auto it = begin; it != end; ++it) {
-    it->age++;
-  }
+  metadata.type = access_type{type} != access_type::PREFETCH;
+  metadata.full_addr = full_addr;
 
   if (hit) {
     ::cache_context.accumulators[this].at(set) += metadata.age;
@@ -100,6 +114,17 @@ void CACHE::update_replacement_state(
     }
   } else {
     ::cache_context.num_misses[this].at(set)++;
+
+    if (::cache_context.num_misses[this].at(set) == 8) {
+      ::cache_context.num_misses[this].at(set) = 0;
+
+      for (auto it = begin; it != end; ++it) {
+        it->age++;
+      }
+
+      metadata.age = 0;
+      metadata.hit = false;
+    }
   }
 }
 

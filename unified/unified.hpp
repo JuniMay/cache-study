@@ -16,6 +16,8 @@ struct CacheLineMetadata {
   /// The age of the cache line.
   /// This is used to estimate the reuse distance.
   size_t age;
+  /// Whether last access was not a prefetch.
+  bool type;
   /// If the cache line was reused.
   bool hit;
   /// Full address of the cache line.

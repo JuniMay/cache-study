@@ -3,6 +3,7 @@
 #include <bitset>
 #include <map>
 #include <vector>
+#include <fstream>
 
 #include "cache.h"
 
@@ -151,4 +152,10 @@ uint32_t CACHE::prefetcher_cache_fill(
 }
 
 void CACHE::prefetcher_cycle_operate() {}
-void CACHE::prefetcher_final_stats() {}
+void CACHE::prefetcher_final_stats() {
+    std::fstream file("prefetcher_info.txt", std::ios::out);
+
+    for (auto& [addr, info] : unified::prefetch_context.prefetch_info[this]) {
+        file << addr << " " << info.prefetch_count << " " << info.estimated_distance << std::endl;
+    }
+}

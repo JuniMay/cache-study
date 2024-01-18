@@ -24,7 +24,7 @@ for subdir, dirs, files in os.walk(result_dir):
                     result[trace_id][executable_name] = {}
 
                     llc = data[0]['sim']['LLC']
-                    l2c = data[0]['sim']['cpu0_L2C']
+                    # l2c = data[0]['sim']['cpu0_L2C']
 
                     llc_total_hit = 0
                     llc_total_miss = 0
@@ -42,10 +42,26 @@ for subdir, dirs, files in os.walk(result_dir):
                         llc_total_miss / instructions) * 1000
                     result[trace_id][executable_name]['IPC'] = instructions / cycles
                     try:
-                        result[trace_id][executable_name]['Prefetch Accuracy'] = l2c['useful prefetch'] / (
-                            l2c['useful prefetch'] + l2c['useless prefetch'])
+                        # result[trace_id][executable_name]['Prefetch Accuracy'] = l2c['useful prefetch'] / (
+                        #     l2c['useful prefetch'] + l2c['useless prefetch'])
+                        
+                        result[trace_id][executable_name]['Prefetch Accuracy'] = llc['useful prefetch'] / (
+                            llc['useful prefetch'] + llc['useless prefetch'])
                     except ZeroDivisionError:
                         result[trace_id][executable_name]['Prefetch Accuracy'] = 0
+
+# calculate IPC speedup compare to lru no prefetch
+for trace_id in result.keys():
+    trace_result = result[trace_id]
+    
+    if 'lru no' not in trace_result:
+        continue
+
+    lru_no_prefetch_ipc = trace_result['lru no']['IPC']
+
+    for executable_name in trace_result.keys():
+        trace_result[executable_name]['IPC Speedup'] = (
+            trace_result[executable_name]['IPC'] - lru_no_prefetch_ipc) / lru_no_prefetch_ipc
 
 
 # print(result)
@@ -58,14 +74,19 @@ for trace_id in result.keys():
     result[trace_id] = dict(
         sorted(trace_result.items(), key=lambda item: item[0]))
 
-for metric in ["LLC Hit Rate", "MPKI", "IPC", "Prefetch Accuracy"]:
+for metric in ["LLC Hit Rate", "MPKI", "IPC", "Prefetch Accuracy", "IPC Speedup"]:
     sns.set(font='Times New Roman', font_scale=1.5,
-            style='whitegrid', palette='viridis')
+            style='whitegrid', palette='Greys_r')
 
     # plot large graph with each trace as a subplot
-    fig, axs = plt.subplots(4, 3, figsize=(20, 15))
+    fig, axs = plt.subplots(3, 4, figsize=(20, 10))
 
-    fig.suptitle(metric)
+    if metric == "LLC Hit Rate":
+        fig.suptitle("LLC Hit Rate (Demand)")
+    elif metric == "MPKI":
+        fig.suptitle("MPKI (Demand)")
+    else:
+        fig.suptitle(metric)
 
     for i, trace_id in enumerate(result.keys()):
         trace_result = result[trace_id]
@@ -112,23 +133,22 @@ for metric in ["LLC Hit Rate", "MPKI", "IPC", "Prefetch Accuracy"]:
         x = np.arange(len(replacements))
         width = 0.15
 
-        axs[i // 3, i % 3].set_title(trace_id)
-        axs[i // 3, i % 3].set_xticks(x)
-        axs[i // 3, i % 3].set_xticklabels(replacements)
-        # axs[i // 3, i % 3].set_ylabel(metric)
+        axs[i // 4, i % 4].set_title(trace_id)
+        axs[i // 4, i % 4].set_xticks(x)
+        axs[i // 4, i % 4].set_xticklabels(replacements)
 
         for j, prefetcher in enumerate(prefetchers):
             offset = (j - num_prefetchers // 2) * width
-            axs[i // 3, i %
-                3].bar(x + offset, grouped_result[prefetcher], width, label=prefetcher)
+            axs[i // 4, i %
+                4].bar(x + offset, grouped_result[prefetcher], width, label=prefetcher)
 
     # only one legend for the whole figure at bottom right
-    handles, labels = axs[2, 1].get_legend_handles_labels()
-    fig.legend(handles, labels, loc='lower right', bbox_to_anchor=(0.88, 0.07))
+    handles, labels = axs[0, 0].get_legend_handles_labels()
+    fig.legend(handles, labels, loc='lower right', bbox_to_anchor=(0.92, 0.07))
 
     # remove empty subplots
-    for i in range(4):
-        for j in range(3):
+    for i in range(3):
+        for j in range(4):
             if axs[i, j].get_title() == "":
                 fig.delaxes(axs[i, j])
 
