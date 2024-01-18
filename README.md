@@ -1,10 +1,18 @@
 # Cache Study
 
-Using reinforcement learning to study cache replacement/prefetching policies.
+Cache replacement/prefetching policy study.
 
-Note that there might be bugs, errors or improper experiment settings in this implementation.
+This repository contains an implementation of RL-based replacement policy exploration. Reinforcement learning is not data-efficient, so the performance is not good enough. A supervised learning method might be a better option for replacement policy exploration 🤗.
 
-And reinforcement learning is not data-efficient, so the performance is not good enough. A supervised learning method might be a better option 🤗.
+Also, this repository contains a unified cache replacement & prefetch policy implementation.
+
+Note that there might be bugs, errors or improper experiment settings in this repository.
+
+## Source Code Walkthrough
+
+- `replacement/` contains the implementation of RLR replacement policy and a cache trace generator.
+- `scripts/` contains some testing and plotting scripts.
+- `unified/` contains the implementation of unified cache replacement & prefetch policy.
 
 ## About
 
